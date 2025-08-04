@@ -13,7 +13,7 @@ pub struct OnPair16 {
     
     // Dictionary storage  
     dictionary: Vec<u8>,                 // Raw token data
-    token_boundaries: Vec<usize>,        // Token end positions in dictionary
+    token_boundaries: Vec<u32>,        // Token end positions in dictionary
 }
 
 impl OnPair16 {
@@ -78,7 +78,7 @@ impl OnPair16 {
             let token = vec![i as u8];
             lpm.insert(&token, i as u16);
             self.dictionary.extend(&token);
-            self.token_boundaries.push(self.dictionary.len());
+            self.token_boundaries.push(self.dictionary.len() as u32);
         }
 
         // Shuffle entries
@@ -118,7 +118,7 @@ impl OnPair16 {
                         added_token = lpm.insert(merged_token, next_token_id);
                         if added_token {
                             self.dictionary.extend(merged_token);
-                            self.token_boundaries.push(self.dictionary.len());
+                            self.token_boundaries.push(self.dictionary.len() as u32);
     
                             frequency.remove(&(previous_token_id, match_token_id));
                             previous_token_id = next_token_id;
@@ -205,8 +205,8 @@ impl OnPair16 {
     /// Buffer must have at least 16 bytes of writable space to avoid undefined behavior.
     #[inline(always)]
     fn decompress_token(&self, token_id: u16, buffer: &mut [u8]) -> usize {
-        let start = self.token_boundaries[token_id as usize];
-        let end = self.token_boundaries[token_id as usize + 1];
+        let start = self.token_boundaries[token_id as usize] as usize;
+        let end = self.token_boundaries[token_id as usize + 1] as usize;
         let token_len = end - start;
 
         unsafe {
@@ -224,7 +224,7 @@ impl OnPair16 {
     pub fn space_used(&self) -> usize {
         self.compressed_data.len() * std::mem::size_of::<u16>() + 
         self.dictionary.len() + 
-        self.token_boundaries.len() * std::mem::size_of::<usize>()
+        self.token_boundaries.len() * std::mem::size_of::<u32>()
     }
 
     /// Shrinks all internal buffers to fit their current contents
