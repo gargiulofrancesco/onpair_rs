@@ -174,50 +174,69 @@ impl OnPair16 {
     }
 
     /// Decompresses a specific string by index
+    /// 
+    /// # Safety Warning
+    /// This method uses unsafe memory operations for performance. All tokens are constrained
+    /// to be at most 16 bytes long, and this method always copies exactly 16 bytes for each
+    /// token regardless of the actual token length (for optimization).
+    /// 
+    /// **The buffer must have sufficient space beyond the actual decompressed data to accommodate
+    /// the full 16-byte copy for the last token, or undefined behavior will occur.**
     #[inline]
-    pub fn decompress_string(&self, index: usize, buffer: &mut [u8]) -> usize {
-        let string_start = self.string_boundaries[index];
-        let string_end = self.string_boundaries[index + 1];
-        let mut output_pos = 0;
+    pub fn decompress_string(&mut self, index: usize, buffer: &mut [u8]) -> usize {
+        let item_start = self.string_boundaries[index];
+        let item_end = self.string_boundaries[index + 1];
+        let dict_ptr = self.dictionary.as_ptr();
+        let end_positions_ptr = self.token_boundaries.as_ptr();
+        let mut size = 0;
 
-        for &token_id in &self.compressed_data[string_start..string_end] {
-            output_pos += self.decompress_token(token_id, &mut buffer[output_pos..]);
+        for &token_id in &self.compressed_data[item_start..item_end] {
+            unsafe {
+                // Access dictionary positions using raw pointers
+                let dict_start = *end_positions_ptr.add(token_id as usize) as usize;
+                let dict_end = *end_positions_ptr.add(token_id as usize + 1) as usize;
+                let length = dict_end - dict_start;
+
+                let src = dict_ptr.add(dict_start);
+                let dst = buffer.as_mut_ptr().add(size);
+                std::ptr::copy_nonoverlapping(src, dst, MAX_LENGTH);
+
+                size += length;
+            }
         }
 
-        output_pos
+        size
     }
 
     /// Decompresses all strings into a single buffer
-    pub fn decompress_all(&self, buffer: &mut [u8]) -> usize {
-        let mut output_pos = 0;
-
-        for &token_id in &self.compressed_data {
-            output_pos += self.decompress_token(token_id, &mut buffer[output_pos..]);
-        }
-
-        output_pos
-    }
-
-    /// Decompresses a single token into the provided buffer
     /// 
-    /// # Warning
-    /// Always copies 16 bytes for performance, regardless of actual token length.
-    /// Buffer must have at least 16 bytes of writable space to avoid undefined behavior.
-    #[inline(always)]
-    fn decompress_token(&self, token_id: u16, buffer: &mut [u8]) -> usize {
-        let start = self.token_boundaries[token_id as usize] as usize;
-        let end = self.token_boundaries[token_id as usize + 1] as usize;
-        let token_len = end - start;
+    /// # Safety Warning
+    /// This method uses unsafe memory operations for performance. All tokens are constrained
+    /// to be at most 16 bytes long, and this method always copies exactly 16 bytes for each
+    /// token regardless of the actual token length (for optimization).
+    /// 
+    /// **The buffer must have sufficient space beyond the actual decompressed data to accommodate
+    /// the full 16-byte copy for the last token, or undefined behavior will occur.**
+    pub fn decompress_all(&self, buffer: &mut [u8]) -> usize {
+        let dict_ptr = self.dictionary.as_ptr();
+        let end_positions_ptr = self.token_boundaries.as_ptr();
+        let mut size = 0;
 
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                self.dictionary.as_ptr().add(start), 
-                buffer.as_mut_ptr(), 
-                MAX_LENGTH
-            );
+        for &token_id in self.compressed_data.iter(){
+            unsafe {
+                let dict_start = *end_positions_ptr.add(token_id as usize) as usize;
+                let dict_end = *end_positions_ptr.add(token_id as usize + 1) as usize;
+                let length = dict_end - dict_start;
+
+                let src = dict_ptr.add(dict_start);
+                let dst = buffer.as_mut_ptr().add(size);
+                std::ptr::copy_nonoverlapping(src, dst, MAX_LENGTH);
+
+                size += length;
+            }
         }
 
-        token_len
+        size
     }
 
     /// Returns the total space (in bytes) used by the compressed data
