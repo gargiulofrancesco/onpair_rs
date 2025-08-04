@@ -195,7 +195,7 @@ impl OnPair {
     /// # Warning
     /// Always copies 16 bytes for performance, regardless of actual token length.
     /// Buffer must have at least 16 bytes of writable space to avoid undefined behavior.
-    #[inline]
+    #[inline(always)]
     fn decompress_token(&self, token_id: u16, buffer: &mut [u8]) -> usize {
         let start = self.token_boundaries[token_id as usize];
         let end = self.token_boundaries[token_id as usize + 1];

@@ -309,7 +309,7 @@ impl StaticLongestPrefixMatcher16{
 }
 
 /// Converts byte sequence to little-endian u64 with length masking
-#[inline]
+#[inline(always)]
 fn bytes_to_u64_le(bytes: &[u8], len: usize) -> u64 {
     let ptr = bytes.as_ptr();
     let value = unsafe {
@@ -320,13 +320,13 @@ fn bytes_to_u64_le(bytes: &[u8], len: usize) -> u64 {
 }
 
 /// Fast prefix checking using bitwise operations
-#[inline]
+#[inline(always)]
 fn is_prefix(text: u64, prefix: u64, text_size: usize, prefix_size: usize) -> bool {
     prefix_size <= text_size && shared_prefix_size(text, prefix) >= prefix_size
 }
 
 /// Bitwise shared prefix length calculation
-#[inline]
+#[inline(always)]
 fn shared_prefix_size(a: u64, b: u64) -> usize {
     ((a ^ b).trailing_zeros() >> 3) as usize
 }

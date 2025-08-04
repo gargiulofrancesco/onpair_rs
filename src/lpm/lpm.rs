@@ -124,7 +124,7 @@ where
     }
 
     /// Converts byte sequence to little-endian u64 with length masking
-    #[inline]
+    #[inline(always)]
     fn bytes_to_u64_le(bytes: &[u8], len: usize) -> u64 {
         let ptr = bytes.as_ptr();
         let value = unsafe {
