@@ -1,0 +1,14 @@
+[package]
+name = "onpair_rs"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+lto = true
+debug = true
+opt-level = 3
+
+[dependencies]
+rustc-hash = "2.0"
+rand = "0.8.5"
+ptr_hash  = { git = "https://github.com/RagnarGrootKoerkamp/ptrhash", rev = "ba43481" }
