@@ -12,7 +12,7 @@ pub struct OnPair {
     
     // Dictionary storage  
     dictionary: Vec<u8>,                 // Raw token data
-    token_boundaries: Vec<u32>,        // Token end positions in dictionary
+    token_boundaries: Vec<u32>,          // Token end positions in dictionary
 }
 
 impl OnPair {
@@ -205,7 +205,7 @@ impl OnPair {
         size
     }
 
-    /// Decompresses all strings into a single buffer
+    /// Decompresses all strings
     /// 
     /// # Safety Warning
     /// This method uses unsafe memory operations for performance. For each token, it initially

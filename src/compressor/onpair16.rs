@@ -208,7 +208,7 @@ impl OnPair16 {
         size
     }
 
-    /// Decompresses all strings into a single buffer
+    /// Decompresses all strings
     /// 
     /// # Safety Warning
     /// This method uses unsafe memory operations for performance. All tokens are constrained
