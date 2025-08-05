@@ -10,7 +10,7 @@ Rust implementation of **OnPair**, a compression algorithm designed for efficien
 OnPair is a field-level compression algorithm designed for workloads requiring fast random access to individual strings in large collections. The compression process consists of two distinct phases:
 
 - **Training Phase**: A longest prefix matching strategy is used to parse the input and identify frequent adjacent token pairs. When the frequency of a pair exceeds a predefined threshold, a new token is created to represent the merged pair. This continues until the dictionary is full or the input data is exhausted. The dictionary supports up to 65,536 tokens, with each token assigned a fixed 2-byte ID.
-- **Parsing Phase**: Once the dictionary is constructed, each string is compressed independently into a sequence of token IDs by greedily applying longest prefix matching
+- **Parsing Phase**: Once the dictionary is constructed, each string is compressed independently into a sequence of token IDs by greedily applying longest prefix matching.
 
 OnPair16 is a variant that limits dictionary entries to a maximum length of 16 bytes. This constraint enables further optimizations in both longest prefix matching and decoding.
 
