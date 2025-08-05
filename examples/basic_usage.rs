@@ -28,8 +28,7 @@ fn main() {
     onpair16.compress_strings(&strings);
 
     // Decompress and verify the results
-    let max_length = strings.iter().map(|s| s.len()).max().unwrap_or(0);
-    let mut buffer = vec![0u8; max_length + 16];
+    let mut buffer = vec![0u8; 256];
     for (i, user_id) in strings.iter().enumerate() {
         println!("\nString {}: \"{}\"", i, user_id);
 
