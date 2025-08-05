@@ -1,6 +1,9 @@
 # OnPair: Short Strings Compression for Fast Random Access
 
-This repository contains the Rust implementation for **OnPair**, a compression algorithm designed for efficient random access on sequences of short strings.
+[![Paper](https://img.shields.io/badge/Paper-arXiv:2508.02280-blue)](https://arxiv.org/abs/2508.02280)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+Rust implementation of **OnPair**, a compression algorithm designed for efficient random access on sequences of short strings.
 
 ## Overview
 
@@ -68,7 +71,9 @@ RUSTFLAGS="-C target-cpu=native" cargo run --example basic_usage --release
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Contact
+## Authors
 
-- **Francesco Gargiulo**: [francesco.gargiulo@phd.unipi.it]
-- **Rossano Venturini**: [rossano.venturini@unipi.it]
+- **Francesco Gargiulo** - [francesco.gargiulo@phd.unipi.it](mailto:francesco.gargiulo@phd.unipi.it)
+- **Rossano Venturini** - [rossano.venturini@unipi.it](mailto:rossano.venturini@unipi.it)
+
+*University of Pisa, Italy*
