@@ -187,14 +187,16 @@ impl LongestPrefixMatcher16{
         }
 
         let prefixes = long_dictionary.keys().copied().collect::<Vec<_>>();
-        let long_phf = PtrHash::new(&prefixes, PtrHashParams::default_fast());
+        let mut params = PtrHashParams::default_fast();
+        params.remap = false;
+        let long_phf = PtrHash::new(&prefixes, params);
         let max = prefixes.iter()
-            .map(|prefix| long_phf.index(prefix))
+            .map(|prefix| long_phf.index_no_remap(prefix))
             .fold(0, |acc, idx| acc.max(idx));
 
         let mut long_info = vec![LongMatchInfo::default(); max as usize + 1];
         for (prefix, &p) in long_dictionary.iter() {
-            let index = long_phf.index(prefix) as usize;
+            let index = long_phf.index_no_remap(prefix) as usize;
             long_info[index] = p;
         }
 
@@ -271,7 +273,7 @@ impl StaticLongestPrefixMatcher16{
     /// Optimized long pattern resolution with inline storage
     #[inline]
     pub fn compute_long_answer(&self, prefix: u64, suffix: u64, suffix_len: usize) -> Option<(u16, usize)> {
-        let index = self.long_phf.index(&prefix);
+        let index = self.long_phf.index_no_remap(&prefix);
 
         // Perfect hash validation - ensure we found the right prefix
         if index >= self.long_info.len() || prefix != self.long_info[index].prefix {
