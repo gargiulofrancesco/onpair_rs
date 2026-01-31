@@ -1,8 +1,8 @@
 //! Longest Prefix Matcher for OnPair
 //!
 //! Provides efficient longest prefix matching using a hybrid approach:
-//! - **Short matches** (≤8 bytes): Direct hash table lookup
-//! - **Long matches** (>8 bytes): Bucketed by 8-byte prefix with suffix verification
+//! - Short matches (≤8 bytes): Direct hash table lookup in decreasing length order
+//! - Long matches (>8 bytes): Skip the first 8 bytes via hash table, then trie lookup for suffixes
 
 use rustc_hash::FxHashMap;
 
@@ -19,22 +19,33 @@ const MASKS: [u64; 9] = [
     0xFFFFFFFFFFFFFFFF, // 8 bytes
 ];
 
-/// Threshold for switching from direct lookup to bucketed approach
-const MIN_MATCH: usize = 8;
+/// Length of the prefix used for indexing trie roots
+const TRIE_PREFIX_LEN: usize = 8;
+
+/// Trie node structure for suffix storage of long patterns
+#[derive(Clone, Debug)]
+struct TrieNode<V> {
+    id: Option<V>,
+    children: Vec<(u8, u32)>,
+}
 
 /// Hybrid longest prefix matcher supporting arbitrary-length patterns
 /// 
-/// Combines direct hash lookup for short patterns with bucketed search for long patterns.
+/// Combines direct hash lookup for short patterns with trie lookup for long patterns.
 /// Optimized for OnPair's token discovery phase where most patterns are short but
 /// long patterns provide significant compression benefits.
 /// 
-/// # Type Parameters
+/// Type Parameters
 /// - `V`: Token ID type (typically `u16` for OnPair)
 pub struct LongestPrefixMatcher<V> {
-    long_match_buckets: FxHashMap<u64, Vec<V>>,     // 8-byte prefix → candidate token IDs
-    short_match_lookup: FxHashMap<(u64, u8), V>,    // (prefix, length) → token ID
-    dictionary: Vec<u8>,                            // Suffix storage for long patterns
-    end_positions: Vec<u32>,                        // Boundary positions in dictionary
+    /// Short patterns: (prefix, length) -> token ID
+    short_match_lookup: FxHashMap<(u64, u8), V>,
+    
+    /// Long patterns Trie roots: 8-byte prefix -> index in node_pool
+    long_match_roots: FxHashMap<u64, u32>,
+    
+    /// Pool of trie nodes (using indices instead of pointers)
+    node_pool: Vec<TrieNode<V>>,
 }
 
 impl<V> LongestPrefixMatcher<V> 
@@ -44,10 +55,9 @@ where
     /// Creates a new empty longest prefix matcher
     pub fn new() -> Self {
         Self {
-            long_match_buckets: FxHashMap::default(),
             short_match_lookup: FxHashMap::default(),
-            dictionary: Vec::with_capacity(1024 * 1024),
-            end_positions: vec![0],
+            long_match_roots: FxHashMap::default(),
+            node_pool: Vec::with_capacity(256 * 1024),
         }
     }
 
@@ -55,33 +65,55 @@ where
     /// 
     /// Automatically chooses storage strategy based on pattern length:
     /// - Short patterns (≤8 bytes): Direct hash table insertion
-    /// - Long patterns (>8 bytes): Bucketed by 8-byte prefix with suffix storage
-    /// 
-    /// Long pattern buckets are kept sorted by pattern length (descending) for
-    /// efficient longest-match-first lookup during matching.
+    /// - Long patterns (>8 bytes): Trie storage for suffixes beyond 8-byte prefix
     #[inline]
     pub fn insert(&mut self, entry: &[u8], id: V) {
-        if entry.len() > MIN_MATCH {
-            // Long pattern: store 8-byte prefix in bucket, suffix in dictionary
-            let prefix = Self::bytes_to_u64_le(&entry, MIN_MATCH);
-            self.dictionary.extend_from_slice(&entry[MIN_MATCH..]);
-            self.end_positions.push(self.dictionary.len() as u32);
-
-            let bucket = self.long_match_buckets.entry(prefix).or_default();
-            bucket.push(id);
-            // Sort by pattern length (longest first) for greedy matching
-            bucket.sort_unstable_by(|&id1, &id2| {
-                let len1 = self.end_positions[id1.into() + 1] as usize 
-                           - self.end_positions[id1.into()] as usize;
-                let len2 = self.end_positions[id2.into() + 1] as usize 
-                           - self.end_positions[id2.into()] as usize;
-                len2.cmp(&len1)
-            });
-        } else {
+        if entry.len() <= TRIE_PREFIX_LEN {
             // Short pattern: direct hash table lookup
-            let prefix = Self::bytes_to_u64_le(&entry, entry.len());
+            let prefix = Self::bytes_to_u64_le(entry, entry.len());
             self.short_match_lookup.insert((prefix, entry.len() as u8), id);
-            self.end_positions.push(self.dictionary.len() as u32);
+        } else {
+            // Long pattern: use trie for suffix
+            let prefix = Self::bytes_to_u64_le(entry, TRIE_PREFIX_LEN);
+
+            // Find or create root node for this 8-byte prefix
+            let mut node_idx = *self.long_match_roots.entry(prefix).or_insert_with(|| {
+                let idx = self.node_pool.len() as u32;
+                self.node_pool.push(TrieNode { id: None, children: Vec::new() });
+                idx
+            });
+
+            // Traverse/Create nodes for the suffix
+            for &byte in &entry[TRIE_PREFIX_LEN..] {
+                // Check if child exists for this byte
+                let mut child_idx = None;
+                
+                // Scope the borrow of the node
+                {
+                    let node = &self.node_pool[node_idx as usize];
+                    for &(c, idx) in &node.children {
+                        if c == byte {
+                            child_idx = Some(idx);
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(idx) = child_idx {
+                    node_idx = idx;
+                } else {
+                    // Create new node
+                    let new_idx = self.node_pool.len() as u32;
+                    self.node_pool.push(TrieNode { id: None, children: Vec::new() });
+                    
+                    // Link parent to new node
+                    self.node_pool[node_idx as usize].children.push((byte, new_idx));
+                    node_idx = new_idx;
+                }
+            }
+
+            // Set ID at the final node (leaf of this pattern)
+            self.node_pool[node_idx as usize].id = Some(id);
         }
     }
 
@@ -90,30 +122,56 @@ where
     /// Returns the token ID and match length for the longest pattern that matches
     /// the beginning of the input data. Uses two-phase search:
     /// 
-    /// 1. **Long pattern search**: Check bucketed patterns (>8 bytes) first for longest matches
-    /// 2. **Short pattern search**: Check direct lookup patterns (≤8 bytes) in decreasing length order
+    /// 1. Long pattern search: Use first 8 bytes to find trie root, then traverse trie for deepest match
+    /// 2. Short pattern search: Check direct lookup patterns (≤8 bytes) in decreasing length order
     #[inline]
     pub fn find_longest_match(&self, data: &[u8]) -> Option<(V, usize)> {
-        // Phase 1: Long pattern search (>8 bytes) - check longest matches first
-        if data.len() > MIN_MATCH {
-            let prefix = Self::bytes_to_u64_le(&data, MIN_MATCH);
+        // Phase 1: Long pattern search (>8 bytes)
+        if data.len() > TRIE_PREFIX_LEN {
+            let prefix = Self::bytes_to_u64_le(data, TRIE_PREFIX_LEN);
             
-            if let Some(bucket) = self.long_match_buckets.get(&prefix) {
-                for &id in bucket {
-                    let dict_start = self.end_positions[id.into()] as usize;
-                    let dict_end = self.end_positions[id.into() + 1] as usize;
-                    let length = dict_end - dict_start;
-                    // Verify suffix matches beyond the 8-byte prefix
-                    if data[MIN_MATCH..].starts_with(&self.dictionary[dict_start..dict_end]) {
-                        return Some((id, MIN_MATCH + length));
+            if let Some(&root_idx) = self.long_match_roots.get(&prefix) {
+                let mut best_long_match = None;
+                let mut current_idx = root_idx;
+                let mut current_len = TRIE_PREFIX_LEN;
+                
+                // Traverse the trie to find the longest possible match
+                for &byte in &data[TRIE_PREFIX_LEN..] {
+                    let node = &self.node_pool[current_idx as usize];
+                    
+                    // Find child node for the current byte
+                    let mut found_idx = None;
+                    for &(c, idx) in &node.children {
+                        if c == byte {
+                            found_idx = Some(idx);
+                            break;
+                        }
                     }
+
+                    if let Some(idx) = found_idx {
+                        current_idx = idx;
+                        current_len += 1;
+                        
+                        // If this node marks the end of a valid pattern, record it
+                        // We keep going to see if there's a longer match
+                        if let Some(id) = self.node_pool[current_idx as usize].id {
+                            best_long_match = Some((id, current_len));
+                        }
+                    } else {
+                        // Mismatch in trie, cannot go deeper
+                        break;
+                    }
+                }
+
+                if let Some(match_res) = best_long_match {
+                    return Some(match_res);
                 }
             }
         }
 
         // Phase 2: Short pattern search (≤8 bytes) - longest to shortest
-        for length in (1..=MIN_MATCH.min(data.len())).rev() {
-            let prefix = Self::bytes_to_u64_le(&data, length);
+        for length in (1..=TRIE_PREFIX_LEN.min(data.len())).rev() {
+            let prefix = Self::bytes_to_u64_le(data, length);
             
             if let Some(&id) = self.short_match_lookup.get(&(prefix, length as u8)) {
                 return Some((id, length));

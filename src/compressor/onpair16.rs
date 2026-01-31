@@ -180,8 +180,8 @@ impl OnPair16 {
     /// to be at most 16 bytes long, and this method always copies exactly 16 bytes for each
     /// token regardless of the actual token length (for optimization).
     /// 
-    /// **The buffer must have sufficient space beyond the actual decompressed data to accommodate
-    /// the full 16-byte copy for the last token, or undefined behavior will occur.**
+    /// The buffer must have sufficient space beyond the actual decompressed data to accommodate
+    /// the full 16-byte copy for the last token, or undefined behavior will occur.
     #[inline]
     pub fn decompress_string(&mut self, index: usize, buffer: &mut [u8]) -> usize {
         let item_start = self.string_boundaries[index];
@@ -215,8 +215,8 @@ impl OnPair16 {
     /// to be at most 16 bytes long, and this method always copies exactly 16 bytes for each
     /// token regardless of the actual token length (for optimization).
     /// 
-    /// **The buffer must have sufficient space beyond the actual decompressed data to accommodate
-    /// the full 16-byte copy for the last token, or undefined behavior will occur.**
+    /// The buffer must have sufficient space beyond the actual decompressed data to accommodate
+    /// the full 16-byte copy for the last token, or undefined behavior will occur.
     pub fn decompress_all(&self, buffer: &mut [u8]) -> usize {
         let dict_ptr = self.dictionary.as_ptr();
         let end_positions_ptr = self.token_boundaries.as_ptr();
