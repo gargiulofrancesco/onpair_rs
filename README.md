@@ -38,7 +38,8 @@ fn main() {
         "user_000004",
     ];
 
-    let mut compressor = OnPair::new();
+    // Initialize OnPair with threshold 5
+    let mut compressor = OnPair::new(5);
     
     // Compress all strings
     compressor.compress_strings(&strings);

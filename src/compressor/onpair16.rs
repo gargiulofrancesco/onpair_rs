@@ -7,6 +7,9 @@ use rand::thread_rng;
 const MAX_LENGTH: usize = 16;
 
 pub struct OnPair16 {
+    // Merging frequency threshold
+    threshold: u16,
+
     // Compressed data storage
     compressed_data: Vec<u16>,           // Sequence of token IDs
     string_boundaries: Vec<usize>,       // End positions for each string
@@ -18,8 +21,11 @@ pub struct OnPair16 {
 
 impl OnPair16 {
     /// Creates a new compressor instance
-    pub fn new() -> Self {
+    pub fn new(threshold: u16) -> Self {
+        assert!(threshold > 1, "Threshold must be greater than 1");
+
         Self {
+            threshold,
             compressed_data: Vec::new(),
             string_boundaries: Vec::new(),
             dictionary: Vec::new(),
@@ -28,8 +34,11 @@ impl OnPair16 {
     }
     
     /// Creates a new compressor with capacity hints for better memory allocation
-    pub fn with_capacity(n_strings: usize, n_bytes: usize) -> Self {
+    pub fn with_capacity(threshold: u16, n_strings: usize, n_bytes: usize) -> Self {
+        assert!(threshold > 1, "Threshold must be greater than 1");
+        
         Self {
+            threshold,
             compressed_data: Vec::with_capacity(n_bytes),
             string_boundaries: Vec::with_capacity(n_strings),
             dictionary: Vec::with_capacity(1024 * 1024),
@@ -85,10 +94,6 @@ impl OnPair16 {
         let mut shuffled_indices: Vec<usize> = (0..end_positions.len()-1).collect();
         shuffled_indices.shuffle(&mut thread_rng());
 
-        // Set the threshold for merging tokens
-        let data_size_mib = data.len() as f64 / (1024.0 * 1024.0);
-        let threshold = data_size_mib.log2().max(2.0) as u16;
-
         // Iterate over entries
         'outer: for &index in shuffled_indices.iter() {
             let start = end_positions[index];
@@ -113,7 +118,7 @@ impl OnPair16 {
                     // Update token frequency and possibly merge tokens
                     *frequency.entry((previous_token_id, match_token_id)).or_insert(0) += 1;
 
-                    if frequency[&(previous_token_id, match_token_id)] >= threshold {
+                    if frequency[&(previous_token_id, match_token_id)] >= self.threshold {
                         let merged_token = &data[pos - previous_length..pos + match_length];
                         added_token = lpm.insert(merged_token, next_token_id);
                         if added_token {

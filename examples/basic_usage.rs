@@ -19,12 +19,12 @@ fn main() {
     let n_strings = strings.len();
     let n_bytes = strings .iter().map(|s| s.len()).sum::<usize>();
 
-    // Compress data using OnPair
-    let mut onpair = OnPair::with_capacity(n_strings, n_bytes);
+    // Compress data using OnPair (threshold set to 5)
+    let mut onpair = OnPair::with_capacity(5, n_strings, n_bytes);
     onpair.compress_strings(&strings);
 
-    // Compress data using OnPair16
-    let mut onpair16 = OnPair16::with_capacity(n_strings, n_bytes);
+    // Compress data using OnPair16 (threshold set to 5)
+    let mut onpair16 = OnPair16::with_capacity(5, n_strings, n_bytes);
     onpair16.compress_strings(&strings);
 
     // Decompress and verify the results
